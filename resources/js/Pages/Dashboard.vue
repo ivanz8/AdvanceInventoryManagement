@@ -11,6 +11,62 @@ import { useToast } from 'vue-toastification';
 
 const toast = useToast();
 const imagePreview = ref(null);
+const searchQuery = ref('');
+const searchResults = ref([]);
+const isSearching = ref(false);
+const selectedImageUrl = ref(null);
+
+// Add Google Custom Search API configuration
+// To get your API key:
+// 1. Go to https://console.cloud.google.com/
+// 2. Create a new project or select an existing one
+// 3. Enable the Custom Search API for your project
+// 4. Create an API key in the Credentials section
+const GOOGLE_API_KEY = 'AIzaSyDljNDLnHy0DkTQAjdxwE2OmSp7klWuW-8'; // Replace with your actual API key
+const SEARCH_ENGINE_ID = 'f4f824a902314470b'; // Your Custom Search Engine ID
+
+const searchImages = async () => {
+    if (!searchQuery.value) return;
+    
+    isSearching.value = true;
+    try {
+        const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+            params: {
+                key: GOOGLE_API_KEY,
+                cx: SEARCH_ENGINE_ID,
+                q: searchQuery.value,
+                searchType: 'image',
+                imgSize: 'medium',
+                num: 10
+            }
+        });
+        
+        searchResults.value = response.data.items || [];
+    } catch (error) {
+        toast.error('Failed to search images. Please try again.');
+        console.error('Image search error:', error);
+    } finally {
+        isSearching.value = false;
+    }
+};
+
+const selectImage = async (imageUrl) => {
+    try {
+        // Fetch the image and convert it to a File object
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const file = new File([blob], 'product-image.jpg', { type: 'image/jpeg' });
+        
+        // Update the form and preview
+        form.image = file;
+        imagePreview.value = imageUrl;
+        selectedImageUrl.value = imageUrl;
+        searchResults.value = []; // Clear search results
+    } catch (error) {
+        toast.error('Failed to load image. Please try another one.');
+        console.error('Image loading error:', error);
+    }
+};
 
 onMounted(() => {
     // Check if the 'success' query parameter is in the URL
@@ -221,6 +277,44 @@ const submit = () => {
                             <!-- Image Upload -->
                             <div class="mt-6">
                                 <InputLabel for="image" value="Product Image" />
+                                
+                                <!-- Image Search Section -->
+                                <div class="mt-2 mb-4">
+                                    <div class="flex gap-2">
+                                        <TextInput
+                                            v-model="searchQuery"
+                                            type="text"
+                                            placeholder="Search for product images..."
+                                            class="flex-1"
+                                            @keyup.enter="searchImages"
+                                        />
+                                        <PrimaryButton
+                                            @click="searchImages"
+                                            :disabled="isSearching"
+                                            class="whitespace-nowrap"
+                                        >
+                                            {{ isSearching ? 'Searching...' : 'Search Images' }}
+                                        </PrimaryButton>
+                                    </div>
+                                    
+                                    <!-- Search Results -->
+                                    <div v-if="searchResults.length > 0" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div
+                                            v-for="(image, index) in searchResults"
+                                            :key="index"
+                                            class="relative aspect-square cursor-pointer rounded-lg overflow-hidden border-2"
+                                            :class="selectedImageUrl === image.link ? 'border-indigo-500' : 'border-gray-200'"
+                                            @click="selectImage(image.link)"
+                                        >
+                                            <img
+                                                :src="image.link"
+                                                :alt="image.title"
+                                                class="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-700 border-dashed rounded-md">
                                     <div class="space-y-1 text-center">
                                         <!-- Image Preview -->

@@ -64,7 +64,10 @@ Route::middleware([
     })->name('pos.test');
     
     Route::get('/profile', function () {
-        return Inertia::render('Profile/Show');
+        return Inertia::render('Profile/Show', [
+            'confirmsTwoFactorAuthentication' => false,
+            'sessions' => []
+        ]);
     })->name('profile.show');
     
     Route::get('/products', function () {
