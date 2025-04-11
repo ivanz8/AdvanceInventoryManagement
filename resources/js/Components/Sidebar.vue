@@ -47,8 +47,11 @@ const isCurrentRoute = (routeName) => {
 
 <template>
     <aside
-        class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300"
-        :class="{ 'w-20': isCollapsed }"
+        class="fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300"
+        :class="{
+            'w-20': isCollapsed,
+            'w-64': !isCollapsed
+        }"
     >
         <!-- Logo -->
         <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
