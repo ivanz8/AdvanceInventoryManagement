@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -7,6 +7,22 @@ const props = defineProps({
         type: Boolean,
         default: false
     }
+});
+
+const isMobile = ref(false);
+
+// Check for mobile viewport
+const checkMobile = () => {
+    isMobile.value = window.innerWidth < 768;
+};
+
+onMounted(() => {
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('resize', checkMobile);
 });
 
 const { auth } = usePage().props;
@@ -47,53 +63,24 @@ const isCurrentRoute = (routeName) => {
 
 <template>
     <aside
-        class="fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300"
-        :class="{
-            'w-20': isCollapsed,
-            'w-64': !isCollapsed
-        }"
+        class="fixed top-16 left-0 bottom-0 z-30 transition-all duration-300 transform"
+        :class="[
+            {
+                'w-20': isCollapsed && !isMobile,
+                'w-64': !isCollapsed || isMobile,
+                '-translate-x-full': isMobile && isCollapsed,
+                'translate-x-0': !isMobile || !isCollapsed
+            },
+            'bg-white dark:bg-gray-800',
+            'border-r border-gray-200 dark:border-gray-700'
+        ]"
     >
-        <!-- Logo -->
-        <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
-            <Link :href="route('dashboard')" class="flex items-center">
-                <svg
-                    class="h-8 w-8 text-gray-800 dark:text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                    />
-                </svg>
-                <span v-if="!isCollapsed" class="ml-2 text-xl font-semibold text-gray-800 dark:text-white">HOYAH</span>
-            </Link>
-        </div>
-
-        <!-- Navigation -->
-        <nav class="mt-5 px-2">
-            <div class="space-y-1">
-                <Link
-                    v-for="item in navigation"
-                    :key="item.name"
-                    :href="route(item.route)"
-                    class="group flex items-center px-2 py-2 text-base font-medium rounded-md"
-                    :class="[
-                        isCurrentRoute(item.route)
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                    ]"
-                >
+        <div class="flex flex-col h-full bg-white dark:bg-gray-800">
+            <!-- Logo -->
+            <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <Link :href="route('dashboard')" class="flex items-center">
                     <svg
-                        class="mr-4 h-6 w-6"
-                        :class="[
-                            isCurrentRoute(item.route)
-                                ? 'text-gray-500 dark:text-gray-300'
-                                : 'text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'
-                        ]"
+                        class="h-8 w-8 text-gray-800 dark:text-white"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -102,12 +89,56 @@ const isCurrentRoute = (routeName) => {
                             stroke-linecap="round"
                             stroke-linejoin="round"
                             stroke-width="2"
-                            :d="item.icon"
+                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                         />
                     </svg>
-                    <span v-if="!isCollapsed">{{ item.name }}</span>
+                    <span v-if="!isCollapsed || isMobile" class="ml-2 text-xl font-semibold text-gray-800 dark:text-white">HOYAH</span>
                 </Link>
             </div>
-        </nav>
+
+            <!-- Navigation -->
+            <nav class="flex-1 overflow-y-auto py-4 bg-white dark:bg-gray-800">
+                <div class="px-3 space-y-1">
+                    <Link
+                        v-for="item in navigation"
+                        :key="item.name"
+                        :href="route(item.route)"
+                        class="group flex items-center px-2 py-2 text-base font-medium rounded-md"
+                        :class="[
+                            isCurrentRoute(item.route)
+                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                        ]"
+                    >
+                        <svg
+                            class="mr-4 h-6 w-6"
+                            :class="[
+                                isCurrentRoute(item.route)
+                                    ? 'text-gray-500 dark:text-gray-300'
+                                    : 'text-gray-400 dark:text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'
+                            ]"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                :d="item.icon"
+                            />
+                        </svg>
+                        <span v-if="!isCollapsed || isMobile">{{ item.name }}</span>
+                    </Link>
+                </div>
+            </nav>
+        </div>
+
+        <!-- Mobile Overlay -->
+        <div
+            v-if="isMobile && !isCollapsed"
+            class="fixed inset-0 bg-gray-600 bg-opacity-50 transition-opacity md:hidden"
+            style="z-index: -1;"
+        ></div>
     </aside>
 </template> 
