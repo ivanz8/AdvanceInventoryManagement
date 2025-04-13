@@ -7,6 +7,8 @@ use Inertia\Inertia;
 use App\Models\Branch;
 use App\Models\Product;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class BranchController extends Controller
 {
@@ -64,6 +66,111 @@ class BranchController extends Controller
         } catch (\Exception $e) {
             Log::error('Error in getBranchProducts: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Update the specified branch.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Branch  $branch
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, Branch $branch)
+    {
+        try {
+            Log::info('Updating branch: ' . $branch->id);
+            Log::info('Request data: ' . json_encode($request->all()));
+
+            // Validate the request
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'location' => 'required|string|max:255',
+            ]);
+
+            // Update the branch
+            $branch->update($validated);
+
+            Log::info('Branch updated successfully: ' . $branch->id);
+
+            return back()->with([
+                'success' => 'Branch updated successfully',
+                'branch' => $branch
+            ]);
+
+        } catch (ValidationException $e) {
+            Log::error('Validation error in branch update: ' . json_encode($e->errors()));
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error updating branch: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Failed to update branch: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Store a newly created branch.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        try {
+            Log::info('Creating new branch');
+            Log::info('Request data: ' . json_encode($request->all()));
+
+            // Validate the request
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'location' => 'required|string|max:255',
+                'contact_number' => 'nullable|string|max:255',
+            ]);
+
+            // Create the branch
+            $branch = Branch::create($validated);
+
+            Log::info('Branch created successfully: ' . $branch->id);
+
+            return back()->with([
+                'success' => 'Branch created successfully',
+                'branch' => $branch
+            ]);
+
+        } catch (ValidationException $e) {
+            Log::error('Validation error in branch creation: ' . json_encode($e->errors()));
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error creating branch: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Failed to create branch: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Delete the specified branch.
+     *
+     * @param  \App\Models\Branch  $branch
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy(Branch $branch)
+    {
+        try {
+            Log::info('Deleting branch: ' . $branch->id);
+
+            // Check if branch has associated products
+            if ($branch->products()->count() > 0) {
+                throw new \Exception('Cannot delete branch with existing products');
+            }
+
+            // Delete the branch
+            $branch->delete();
+
+            Log::info('Branch deleted successfully: ' . $branch->id);
+
+            return back()->with('success', 'Branch deleted successfully');
+
+        } catch (\Exception $e) {
+            Log::error('Error deleting branch: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Failed to delete branch: ' . $e->getMessage()]);
         }
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\AboutController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\SalesController;
+use App\Http\Controllers\BranchController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -88,6 +89,10 @@ Route::middleware([
     // Add sales routes
     Route::get('/api/sales', [SalesController::class, 'index'])->name('sales.index');
     Route::get('/api/sales/branch-stats', [SalesController::class, 'branchStats'])->name('sales.branch-stats');
+
+    Route::put('/branches/{branch}', [BranchController::class, 'update'])->name('branches.update');
+    Route::post('/branches', [BranchController::class, 'store'])->name('branches.store')->middleware(['auth', 'verified']);
+    Route::delete('/branches/{branch}', [BranchController::class, 'destroy'])->name('branches.destroy')->middleware(['auth', 'verified']);
 });
 
 

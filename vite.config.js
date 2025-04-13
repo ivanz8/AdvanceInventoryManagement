@@ -20,6 +20,11 @@ export default defineConfig({
                 exclude: ['js-big-decimal']
             }
         }),
-        
     ],
+    server: {
+        host: '0.0.0.0',
+        hmr: {
+            host: '192.168.2.16'
+        },
+    },
 });
