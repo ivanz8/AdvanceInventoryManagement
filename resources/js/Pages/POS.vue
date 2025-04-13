@@ -247,10 +247,10 @@ const finalizePayment = async () => {
                             @click="selectBranch(branch.id)"
                             class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer border-2 border-transparent hover:border-indigo-500 transform hover:scale-105"
                         >
-                            <h4 class="text-xl font-semibold text-white">
+                        <h4 class="text-xl font-semibold text-gray-900 dark:text-white">
                                 {{ branch.name }}
                             </h4>
-                            <p class="text-gray-400 mt-2">
+                            <p class="text-gray-600 dark:text-gray-400 mt-2">
                                 {{ branch.location }}
                             </p>
                             <p class="text-gray-500 mt-2 text-sm">

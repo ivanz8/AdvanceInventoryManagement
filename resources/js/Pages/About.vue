@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { usePage, useForm, router } from '@inertiajs/vue3';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -8,6 +8,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputError from '@/Components/InputError.vue';
 import { useToast } from 'vue-toastification';
 import axios from 'axios';
+import LineChart from '@/Components/LineChart.vue';
 
 const toast = useToast();
 
@@ -34,6 +35,63 @@ const salesDateRange = ref({
 const isEditBranchModalOpen = ref(false);
 const isNewBranchModalOpen = ref(false);
 const isConfirmDeleteModalOpen = ref(false);
+const selectedSubModule = ref(null);
+const reportFilters = ref({
+  dateRange: 'thisMonth',
+  startDate: null,
+  endDate: null,
+  branchId: '',
+  categoryId: '',
+});
+const sales = ref([]);
+const summary = ref({
+  total_sales: 0,
+  total_transactions: 0,
+  total_items_sold: 0,
+  average_transaction: 0,
+});
+const comparison = ref({
+  percentage_change: 0,
+});
+
+// Add dashboardData reactive reference
+const dashboardData = ref({
+  realtimeSales: {
+    todaySales: 0,
+    transactionCount: 0,
+    lastUpdated: new Date()
+  },
+  dailySales: [],
+  weeklySales: [],
+  monthlySales: [],
+  yearlySales: [],
+  topProducts: [],
+  targets: {
+    daily: 0,
+    weekly: 0,
+    monthly: 0,
+    yearly: 0
+  }
+});
+
+// Add salesAchievements computed property
+const salesAchievements = computed(() => {
+  if (!dashboardData.value.realtimeSales.todaySales || !dashboardData.value.targets.daily) {
+    return {
+      daily: 0,
+      weekly: 0,
+      monthly: 0,
+      yearly: 0
+    };
+  }
+
+  return {
+    daily: Math.round((dashboardData.value.realtimeSales.todaySales / dashboardData.value.targets.daily) * 100),
+    weekly: Math.round((dashboardData.value.realtimeSales.todaySales * 7 / dashboardData.value.targets.weekly) * 100),
+    monthly: Math.round((dashboardData.value.realtimeSales.todaySales * 30 / dashboardData.value.targets.monthly) * 100),
+    yearly: Math.round((dashboardData.value.realtimeSales.todaySales * 365 / dashboardData.value.targets.yearly) * 100)
+  };
+});
 
 // Edit form
 const editForm = useForm({
@@ -184,18 +242,14 @@ const selectBranch = (branchId) => {
   }
   selectedBranch.value = branchId;
   selectedModule.value = null;
+  selectedSubModule.value = null;
   console.log('Selected branch set to:', selectedBranch.value);
 };
 
 // Select module (Products, Sales, etc.)
 const selectModule = (module) => {
   selectedModule.value = module;
-  if (module === 'products') {
-    selectedCategory.value = 'all';
-    visibleCount.value = 5;
-  } else if (module === 'sales') {
-    loadSalesData();
-  }
+  selectedSubModule.value = null;
 };
 
 // Compute sales summary
@@ -379,6 +433,245 @@ const confirmDelete = () => {
         }
     });
 };
+
+// Add these helper functions
+const formatNumber = (value) => {
+  return new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+};
+
+const formatDate = (date) => {
+  return new Date(date).toLocaleString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+// Add these methods for report functionality
+const fetchSalesReport = async () => {
+  loading.value = true;
+  try {
+    console.log('Fetching sales report with params:', {
+      branch_id: selectedBranch.value,
+      ...reportFilters.value
+    });
+    
+    const response = await axios.get(route('sales.report'), {
+      params: {
+        branch_id: selectedBranch.value,
+        date_range: reportFilters.value.dateRange,
+        start_date: reportFilters.value.startDate,
+        end_date: reportFilters.value.endDate,
+        category_id: reportFilters.value.categoryId
+      }
+    });
+    
+    console.log('Sales report response:', response.data);
+    
+    if (response.data && response.data.success) {
+      summary.value = response.data.summary;
+      comparison.value = response.data.comparison;
+      sales.value = response.data.sales;
+      toast.success('Sales report loaded successfully');
+    } else {
+      console.error('Invalid response format:', response.data);
+      toast.error(response.data?.message || 'Invalid response format from server');
+    }
+  } catch (error) {
+    console.error('Error fetching sales report:', error);
+    console.error('Error response:', error.response);
+    toast.error(error.response?.data?.message || 'Failed to load sales report');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const exportReport = async (format) => {
+  try {
+    const response = await fetch(`/api/sales-report/export/${format}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        branch_id: selectedBranch.value?.id,
+        ...reportFilters.value,
+      }),
+    });
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sales-report-${format}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    console.error(`Error exporting ${format} report:`, error);
+  }
+};
+
+const printReport = () => {
+  window.print();
+};
+
+// Add watcher for filter changes
+watch(reportFilters, () => {
+  if (selectedSubModule.value === 'reports') {
+    fetchSalesReport();
+  }
+}, { deep: true });
+
+// Add loading state for dashboard
+const dashboardLoading = ref(false);
+
+// Add these reactive references
+const sortField = ref('quantity_sold');
+const sortDirection = ref('desc');
+
+const toggleSort = (field) => {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortField.value = field;
+    sortDirection.value = 'desc';
+  }
+};
+
+const sortIcon = (field) => {
+  if (sortField.value !== field) return '';
+  return sortDirection.value === 'asc' ? '↑' : '↓';
+};
+
+const sortedTopProducts = computed(() => {
+  if (!dashboardData.value.topProducts) return [];
+  
+  return [...dashboardData.value.topProducts].sort((a, b) => {
+    let aValue = a[sortField.value];
+    let bValue = b[sortField.value];
+    
+    if (sortField.value === 'margin' || sortField.value === 'revenue') {
+      aValue = parseFloat(aValue);
+      bValue = parseFloat(bValue);
+    }
+    
+    if (sortDirection.value === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+});
+
+// Update the fetchDashboardData method
+const fetchDashboardData = async () => {
+  if (!selectedBranch.value) return;
+  
+  dashboardLoading.value = true;
+  try {
+    console.log('Fetching dashboard data for branch:', selectedBranch.value);
+    const response = await axios.get(route('sales.dashboard'), {
+      params: {
+        branch_id: selectedBranch.value,
+        sort_by: sortField.value,
+        sort_order: sortDirection.value
+      }
+    });
+    
+    console.log('Dashboard API response:', response.data);
+    
+    if (response.data.success) {
+      // Initialize dashboard data with default values
+      dashboardData.value = {
+        realtimeSales: {
+          todaySales: parseFloat(response.data.data.todaySales) || 0,
+          transactionCount: parseInt(response.data.data.todayCount) || 0,
+          lastUpdated: new Date()
+        },
+        dailySales: response.data.data.dailySales || [],
+        weeklySales: response.data.data.weeklySales || [],
+        monthlySales: response.data.data.monthlySales || [],
+        yearlySales: response.data.data.yearlySales || [],
+        topProducts: response.data.data.topProducts || [],
+        targets: {
+          daily: parseFloat(response.data.data.targets?.daily) || 0,
+          weekly: parseFloat(response.data.data.targets?.weekly) || 0,
+          monthly: parseFloat(response.data.data.targets?.monthly) || 0,
+          yearly: parseFloat(response.data.data.targets?.yearly) || 0
+        }
+      };
+      toast.success('Dashboard data updated successfully');
+    } else {
+      console.error('Invalid response format:', response.data);
+      toast.error(response.data?.message || 'Failed to load dashboard data');
+    }
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    console.error('Error response:', error.response);
+    toast.error(error.response?.data?.message || 'Failed to load dashboard data');
+  } finally {
+    dashboardLoading.value = false;
+  }
+};
+
+const startRealtimeUpdates = () => {
+  // Clear any existing interval
+  if (window.realtimeInterval) {
+    clearInterval(window.realtimeInterval);
+  }
+
+  // Update realtime sales every minute
+  window.realtimeInterval = setInterval(async () => {
+    if (!selectedBranch.value) return;
+    
+    try {
+      const response = await axios.get(route('sales.realtime'), {
+        params: {
+          branch_id: selectedBranch.value
+        }
+      });
+      
+      if (response.data.success) {
+        dashboardData.value.realtimeSales = {
+          todaySales: response.data.data.todaySales || 0,
+          transactionCount: response.data.data.transactionCount || 0,
+          lastUpdated: response.data.data.lastUpdated ? new Date(response.data.data.lastUpdated) : new Date()
+        };
+      }
+    } catch (error) {
+      console.error('Error updating realtime sales:', error);
+    }
+  }, 60000);
+};
+
+// Add cleanup on component unmount
+onUnmounted(() => {
+  if (window.realtimeInterval) {
+    clearInterval(window.realtimeInterval);
+  }
+});
+
+// Add watcher for selected branch
+watch(selectedBranch, (newValue) => {
+  if (newValue && selectedModule.value === 'sales' && selectedSubModule.value === 'dashboard') {
+    fetchDashboardData();
+    startRealtimeUpdates();
+  }
+});
+
+// Add watcher for selectedSubModule
+watch(selectedSubModule, (newValue) => {
+  if (newValue === 'dashboard' && selectedModule.value === 'sales' && selectedBranch.value) {
+    fetchDashboardData();
+    startRealtimeUpdates();
+  }
+});
 </script>
 
 <template>
@@ -620,108 +913,302 @@ const confirmDelete = () => {
         </div>
 
         <!-- Sales Module -->
-        <div v-if="selectedModule === 'sales' && (selectedBranch)" class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
+        <div v-if="selectedModule === 'sales' && selectedBranch" class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
           <div class="p-6">
-            <div class="mb-6">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Sales Report</h3>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {{ currentBranchName }}
-              </p>
-            </div>
-
-            <!-- Date Range Selection -->
-            <div class="mb-6">
-              <div class="flex gap-4 mb-4">
-                <div class="flex-1">
-                  <InputLabel value="Start Date" />
-                  <TextInput
-                    type="date"
-                    v-model="salesDateRange.start"
-                    class="mt-1 block w-full"
-                  />
-                </div>
-                <div class="flex-1">
-                  <InputLabel value="End Date" />
-                  <TextInput
-                    type="date"
-                    v-model="salesDateRange.end"
-                    class="mt-1 block w-full"
-                  />
-                </div>
+            <div class="mb-6 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Sales Management</h3>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {{ currentBranchName }} - Select a module to continue
+                </p>
               </div>
-              <div class="flex justify-end">
+              <div class="flex space-x-2">
                 <button
-                  @click="loadSalesData"
-                  class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  :disabled="salesLoading"
+                  @click="selectedModule = null"
+                  class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                 >
-                  <span v-if="salesLoading">Loading...</span>
-                  <span v-else>Fetch Sales</span>
+                  Back to Modules
                 </button>
               </div>
             </div>
 
-            <!-- Sales Summary -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Sales</h4>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  ₱{{ salesSummary.totalSales.toFixed(2) }}
-                </p>
+            <!-- Sales Sub-modules -->
+            <div v-if="!selectedSubModule" class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <!-- Sales Dashboard Overview -->
+              <div 
+                @click="selectedSubModule = 'dashboard'"
+                class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors duration-150 cursor-pointer"
+              >
+                <div class="p-6">
+                  <div class="flex items-center">
+                    <div class="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-full">
+                      <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <div class="ml-4">
+                      <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Sales Dashboard Overview</h4>
+                      <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        View real-time sales metrics and performance analytics
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Items Sold</h4>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  {{ salesSummary.totalItems }}
-                </p>
-              </div>
-              <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Average Order Value</h4>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  ₱{{ salesSummary.averageOrderValue.toFixed(2) }}
-                </p>
+
+              <!-- Sales Reports -->
+              <div 
+                @click="selectedSubModule = 'reports'"
+                class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors duration-150 cursor-pointer"
+              >
+                <div class="p-6">
+                  <div class="flex items-center">
+                    <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                      <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div class="ml-4">
+                      <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Sales Reports</h4>
+                      <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        Generate and analyze detailed sales reports
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Sales Table -->
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Products</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total</th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  <tr v-if="salesLoading">
-                    <td colspan="3" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                      Loading sales data...
-                    </td>
-                  </tr>
-                  <tr v-else-if="!salesData.length">
-                    <td colspan="3" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                      No sales data available for the selected period
-                    </td>
-                  </tr>
-                  <tr v-for="sale in salesData" :key="sale.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {{ new Date(sale.created_at).toLocaleDateString() }}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                      <div class="space-y-1">
-                        <div v-for="item in sale.items" :key="item.id" class="flex justify-between">
-                          <span>{{ item.product.name }}</span>
-                          <span class="text-gray-500 dark:text-gray-400">x{{ item.quantity }}</span>
-                        </div>
+            <!-- Sales Report Content -->
+            <div v-else-if="selectedSubModule === 'reports'" class="mt-6">
+              <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6">
+                <div class="mb-6 flex justify-between items-center">
+                  <div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Sales Reports</h3>
+                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      Generate and analyze detailed sales reports
+                    </p>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      @click="exportReport('csv')"
+                      class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Export CSV</span>
+                    </button>
+                    <button
+                      @click="exportReport('pdf')"
+                      class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                      <span>Export PDF</span>
+                    </button>
+                    <button
+                      @click="printReport"
+                      class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      <span>Print</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                  <!-- Date Range Filter -->
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Date Range
+                    </label>
+                    <select
+                      v-model="reportFilters.dateRange"
+                      class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
+                    >
+                      <option value="today">Today</option>
+                      <option value="yesterday">Yesterday</option>
+                      <option value="last7days">Last 7 Days</option>
+                      <option value="thisMonth">This Month</option>
+                      <option value="lastMonth">Last Month</option>
+                      <option value="thisYear">This Year</option>
+                      <option value="custom">Custom Range</option>
+                    </select>
+                  </div>
+
+                  <!-- Custom Date Range -->
+                  <div v-if="reportFilters.dateRange === 'custom'" class="lg:col-span-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        v-model="reportFilters.startDate"
+                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        v-model="reportFilters.endDate"
+                        class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Category Filter -->
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Category
+                    </label>
+                    <select
+                      v-model="reportFilters.categoryId"
+                      class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
+                    >
+                      <option value="">All Categories</option>
+                      <option v-for="(name, id) in categories" :key="id" :value="id">
+                        {{ name }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center">
+                      <div class="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-full">
+                        <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      ₱{{ Number(sale.total).toFixed(2) }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Sales</p>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">₱{{ formatNumber(summary.total_sales) }}</p>
+                      </div>
+                    </div>
+                    <div class="mt-4 flex items-center text-sm">
+                      <span :class="comparison.percentage_change >= 0 ? 'text-green-500' : 'text-red-500'">
+                        {{ comparison.percentage_change >= 0 ? '↑' : '↓' }}
+                        {{ Math.abs(comparison.percentage_change).toFixed(1) }}%
+                      </span>
+                      <span class="text-gray-500 dark:text-gray-400 ml-2">vs previous period</span>
+                    </div>
+                  </div>
+
+                  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center">
+                      <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                        <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                      </div>
+                      <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Transactions</p>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ formatNumber(summary.total_transactions) }}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center">
+                      <div class="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
+                        <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                      <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Items Sold</p>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ formatNumber(summary.total_items_sold) }}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center">
+                      <div class="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
+                        <svg class="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Average Order</p>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">₱{{ formatNumber(summary.average_transaction) }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Transactions Table -->
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead class="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer" @click="toggleSort('name')">
+                            Product {{ sortIcon('name') }}
+                          </th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer" @click="toggleSort('category')">
+                            Category {{ sortIcon('category') }}
+                          </th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer" @click="toggleSort('quantity_sold')">
+                            Quantity Sold {{ sortIcon('quantity_sold') }}
+                          </th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer" @click="toggleSort('revenue')">
+                            Revenue {{ sortIcon('revenue') }}
+                          </th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer" @click="toggleSort('margin')">
+                            Profit Margin {{ sortIcon('margin') }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tr v-if="loading" class="animate-pulse">
+                          <td colspan="5" class="px-6 py-4">
+                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                          </td>
+                        </tr>
+                        <tr v-else-if="!sales.length" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td colspan="5" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                            No sales data available for the selected filters.
+                          </td>
+                        </tr>
+                        <tr v-for="sale in sales" :key="sale.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            {{ formatDate(sale.created_at) }}
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            {{ sale.id }}
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            {{ sale.branch.name }}
+                          </td>
+                          <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                            <div class="space-y-1">
+                              <div v-for="item in sale.items" :key="item.id" class="flex justify-between">
+                                <span>{{ item.product.name }}</span>
+                                <span class="text-gray-500 dark:text-gray-400">x{{ item.quantity }}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 text-right">
+                            ₱{{ formatNumber(sale.total) }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -761,392 +1248,579 @@ const confirmDelete = () => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- View Modal -->
-    <div
-      v-if="isModalOpen"
-      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
-    >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">{{ selectedProduct?.name }}</h3>
-          <div class="flex space-x-2">
-            <button 
-              @click="openEditModal(selectedProduct)" 
-              class="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
-            >
-              Edit
-            </button>
-            <button @click="closeModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
-          </div>
-        </div>
-        <div class="flex flex-col sm:flex-row">
-          <img
-            :src="`/storage/${selectedProduct?.image}`"
-            alt="Product Image"
-            class="w-full sm:w-1/2 h-64 object-contain bg-gray-100 dark:bg-gray-700 rounded"
-          />
-          <div class="sm:ml-6 mt-4 sm:mt-0 space-y-4">
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p class="font-medium text-gray-700 dark:text-gray-300">Barcode:</p>
-                <p class="text-gray-600 dark:text-gray-400">{{ selectedProduct?.barcode }}</p>
+        <!-- Dashboard Content -->
+        <div v-if="selectedSubModule === 'dashboard'" class="mt-6">
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6">
+            <!-- Real-time Sales Counter -->
+            <div class="mb-8">
+              <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Real-time Sales</h3>
+                <span v-if="dashboardData.realtimeSales.lastUpdated" class="text-sm text-gray-500 dark:text-gray-400">
+                  Last updated: {{ formatDate(dashboardData.realtimeSales.lastUpdated) }}
+                </span>
               </div>
-              <div>
-                <p class="font-medium text-gray-700 dark:text-gray-300">Stock Quantity:</p>
-                <p class="text-gray-600 dark:text-gray-400">{{ selectedProduct?.stock_quantity }}</p>
-              </div>
-              <div>
-                <p class="font-medium text-gray-700 dark:text-gray-300">Category:</p>
-                <p class="text-gray-600 dark:text-gray-400">{{ selectedProduct?.category?.name }}</p>
-              </div>
-            </div>
-            <p class="text-green-600 dark:text-green-400 font-medium text-lg">
-              ${{ selectedProduct?.price }}
-            </p>
-          </div>
-        </div>
-        <div class="mt-6 text-right">
-          <button @click="closeModal" class="px-4 py-2 bg-indigo-600 dark:bg-indigo-700 text-white rounded hover:bg-indigo-700 dark:hover:bg-indigo-800">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Edit Modal -->
-    <div
-      v-if="isEditModalOpen && (selectedBranch)"
-      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
-    >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Edit Product</h3>
-          <button @click="closeEditModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
-        </div>
-        
-        <form @submit.prevent="updateProduct" class="space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Product Name -->
-            <div>
-              <InputLabel for="edit_name" value="Product Name" />
-              <TextInput
-                id="edit_name"
-                v-model="editForm.name"
-                type="text"
-                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
-                required
-              />
-              <InputError class="mt-2" :message="editForm.errors.name" />
-            </div>
-
-            <!-- Barcode -->
-            <div>
-              <InputLabel for="edit_barcode" value="Barcode" />
-              <TextInput
-                id="edit_barcode"
-                v-model="editForm.barcode"
-                type="text"
-                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
-                required
-              />
-              <InputError class="mt-2" :message="editForm.errors.barcode" />
-            </div>
-
-            <!-- Category Selection -->
-            <div>
-              <InputLabel for="edit_category_id" value="Category" />
-              <select
-                id="edit_category_id"
-                v-model="editForm.category_id"
-                class="mt-1 block w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
-                required
-              >
-                <option value="" class="bg-gray-50 dark:bg-gray-800">Select Category</option>
-                <option 
-                  v-for="(name, id) in categories"
-                  :key="id"
-                  :value="id"
-                  class="bg-gray-50 dark:bg-gray-800"
-                >
-                  {{ name }}
-                </option>
-              </select>
-              <InputError class="mt-2" :message="editForm.errors.category_id" />
-            </div>
-
-            <!-- Branch Selection -->
-            <div>
-              <InputLabel for="edit_branch_id" value="Branch" />
-              <select
-                id="edit_branch_id"
-                v-model="editForm.branch_id"
-                class="mt-1 block w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
-                required
-              >
-                <option value="" class="bg-gray-50 dark:bg-gray-800">Select Branch</option>
-                <option 
-                  v-for="branch in branches"
-                  :key="branch.id"
-                  :value="branch.id"
-                  class="bg-gray-50 dark:bg-gray-800"
-                >
-                  {{ branch.name }} - {{ branch.location }}
-                </option>
-              </select>
-              <InputError class="mt-2" :message="editForm.errors.branch_id" />
-            </div>
-
-            <!-- Price -->
-            <div>
-              <InputLabel for="edit_price" value="Price" />
-              <div class="mt-1 relative rounded-md shadow-sm">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span class="text-gray-500 dark:text-gray-400 sm:text-sm">$</span>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-lg">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">Today's Sales</p>
+                      <p class="mt-2 text-3xl font-semibold text-gray-900 dark:text-gray-100">
+                        ₱{{ formatNumber(dashboardData.realtimeSales.todaySales) }}
+                      </p>
+                    </div>
+                    <div class="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-full">
+                      <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
-                <TextInput
-                  id="edit_price"
-                  v-model="editForm.price"
-                  type="number"
-                  step="0.01"
-                  class="pl-7 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
-                  required
-                />
+                <div class="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-green-600 dark:text-green-400">Transaction Count</p>
+                      <p class="mt-2 text-3xl font-semibold text-gray-900 dark:text-gray-100">
+                        {{ dashboardData.realtimeSales.transactionCount }}
+                      </p>
+                    </div>
+                    <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                      <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <InputError class="mt-2" :message="editForm.errors.price" />
             </div>
 
-            <!-- Stock Quantity -->
+            <!-- Sales Charts -->
+            <div class="mb-8">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Sales Trends</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Daily Sales</h4>
+                  <div class="h-64">
+                    <LineChart :data="dashboardData.dailySales" />
+                  </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Weekly Sales</h4>
+                  <div class="h-64">
+                    <LineChart :data="dashboardData.weeklySales" />
+                  </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Monthly Sales</h4>
+                  <div class="h-64">
+                    <LineChart :data="dashboardData.monthlySales" />
+                  </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Yearly Sales</h4>
+                  <div class="h-64">
+                    <LineChart :data="dashboardData.yearlySales" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top Selling Products -->
+            <div class="mb-8">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Top Selling Products</h3>
+              <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" @click="toggleSort('name')">
+                        Product {{ sortIcon('name') }}
+                      </th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" @click="toggleSort('category')">
+                        Category {{ sortIcon('category') }}
+                      </th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" @click="toggleSort('quantity_sold')">
+                        Quantity Sold {{ sortIcon('quantity_sold') }}
+                      </th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" @click="toggleSort('revenue')">
+                        Revenue {{ sortIcon('revenue') }}
+                      </th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" @click="toggleSort('margin')">
+                        Profit Margin {{ sortIcon('margin') }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    <tr v-if="dashboardLoading" class="animate-pulse">
+                      <td colspan="5" class="px-6 py-4">
+                        <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                      </td>
+                    </tr>
+                    <tr v-else-if="!dashboardData.topProducts.length" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td colspan="5" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                        No products data available.
+                      </td>
+                    </tr>
+                    <tr v-for="product in sortedTopProducts" :key="product.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                          <div class="flex-shrink-0 h-10 w-10">
+                            <img class="h-10 w-10 rounded-full" :src="`/storage/${product.image}`" :alt="product.name">
+                          </div>
+                          <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ product.name }}</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">{{ product.barcode }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900 dark:text-gray-100">{{ product.category?.name }}</div>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900 dark:text-gray-100">{{ product.quantity_sold }}</div>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900 dark:text-gray-100">₱{{ formatNumber(product.revenue) }}</div>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm" :class="product.margin >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                          {{ product.margin }}%
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Sales Targets and Achievements -->
             <div>
-              <InputLabel for="edit_stock_quantity" value="Stock Quantity" />
-              <TextInput
-                id="edit_stock_quantity"
-                v-model="editForm.stock_quantity"
-                type="number"
-                class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
-                required
-              />
-              <InputError class="mt-2" :message="editForm.errors.stock_quantity" />
+              <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Sales Targets & Achievements</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Daily Target</p>
+                      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                        ₱{{ formatNumber(dashboardData.targets.daily) }}
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Achievement</p>
+                      <p class="mt-2 text-2xl font-semibold" :class="salesAchievements.daily >= 100 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'">
+                        {{ salesAchievements.daily }}%
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div class="bg-indigo-600 h-2.5 rounded-full" :style="{ width: `${Math.min(100, salesAchievements.daily)}%` }"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Weekly Target</p>
+                      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                        ₱{{ formatNumber(dashboardData.targets.weekly) }}
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Achievement</p>
+                      <p class="mt-2 text-2xl font-semibold" :class="salesAchievements.weekly >= 100 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'">
+                        {{ salesAchievements.weekly }}%
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div class="bg-indigo-600 h-2.5 rounded-full" :style="{ width: `${Math.min(100, salesAchievements.weekly)}%` }"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Monthly Target</p>
+                      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                        ₱{{ formatNumber(dashboardData.targets.monthly) }}
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Achievement</p>
+                      <p class="mt-2 text-2xl font-semibold" :class="salesAchievements.monthly >= 100 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'">
+                        {{ salesAchievements.monthly }}%
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div class="bg-indigo-600 h-2.5 rounded-full" :style="{ width: `${Math.min(100, salesAchievements.monthly)}%` }"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Yearly Target</p>
+                      <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                        ₱{{ formatNumber(dashboardData.targets.yearly) }}
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Achievement</p>
+                      <p class="mt-2 text-2xl font-semibold" :class="salesAchievements.yearly >= 100 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'">
+                        {{ salesAchievements.yearly }}%
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <div class="bg-indigo-600 h-2.5 rounded-full" :style="{ width: `${Math.min(100, salesAchievements.yearly)}%` }"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Image Upload -->
-          <div class="mt-6">
-            <InputLabel for="edit_image" value="Product Image" />
-            <div 
-              class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-700 border-dashed rounded-md"
-              :class="{ 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20': isDragging }"
-              @dragover="handleDragOver"
-              @dragleave="handleDragLeave"
-              @drop="handleDrop"
-            >
-              <div v-if="!imagePreview" class="space-y-1 text-center">
-                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div class="flex text-sm text-gray-600 dark:text-gray-400">
-                  <label for="edit_image" class="relative cursor-pointer bg-white dark:bg-gray-800 rounded-md font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                    <span>Upload a file</span>
-                    <input 
-                      id="edit_image" 
-                      type="file" 
-                      class="sr-only" 
-                      @change="handleImageUpload"
-                      accept="image/*"
+        <!-- Edit Modal -->
+        <div
+          v-if="isEditModalOpen && (selectedBranch)"
+          class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
+        >
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Edit Product</h3>
+              <button @click="closeEditModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+            </div>
+            
+            <form @submit.prevent="updateProduct" class="space-y-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Product Name -->
+                <div>
+                  <InputLabel for="edit_name" value="Product Name" />
+                  <TextInput
+                    id="edit_name"
+                    v-model="editForm.name"
+                    type="text"
+                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
+                    required
+                  />
+                  <InputError class="mt-2" :message="editForm.errors.name" />
+                </div>
+
+                <!-- Barcode -->
+                <div>
+                  <InputLabel for="edit_barcode" value="Barcode" />
+                  <TextInput
+                    id="edit_barcode"
+                    v-model="editForm.barcode"
+                    type="text"
+                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
+                    required
+                  />
+                  <InputError class="mt-2" :message="editForm.errors.barcode" />
+                </div>
+
+                <!-- Category Selection -->
+                <div>
+                  <InputLabel for="edit_category_id" value="Category" />
+                  <select
+                    id="edit_category_id"
+                    v-model="editForm.category_id"
+                    class="mt-1 block w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
+                    required
+                  >
+                    <option value="" class="bg-gray-50 dark:bg-gray-800">Select Category</option>
+                    <option 
+                      v-for="(name, id) in categories"
+                      :key="id"
+                      :value="id"
+                      class="bg-gray-50 dark:bg-gray-800"
                     >
-                  </label>
-                  <p class="pl-1">or drag and drop</p>
+                      {{ name }}
+                    </option>
+                  </select>
+                  <InputError class="mt-2" :message="editForm.errors.category_id" />
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  PNG, JPG, GIF up to 10MB
-                </p>
+
+                <!-- Branch Selection -->
+                <div>
+                  <InputLabel for="edit_branch_id" value="Branch" />
+                  <select
+                    id="edit_branch_id"
+                    v-model="editForm.branch_id"
+                    class="mt-1 block w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-600 p-2.5"
+                    required
+                  >
+                    <option value="" class="bg-gray-50 dark:bg-gray-800">Select Branch</option>
+                    <option 
+                      v-for="branch in branches"
+                      :key="branch.id"
+                      :value="branch.id"
+                      class="bg-gray-50 dark:bg-gray-800"
+                    >
+                      {{ branch.name }} - {{ branch.location }}
+                    </option>
+                  </select>
+                  <InputError class="mt-2" :message="editForm.errors.branch_id" />
+                </div>
+
+                <!-- Price -->
+                <div>
+                  <InputLabel for="edit_price" value="Price" />
+                  <div class="mt-1 relative rounded-md shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span class="text-gray-500 dark:text-gray-400 sm:text-sm">$</span>
+                    </div>
+                    <TextInput
+                      id="edit_price"
+                      v-model="editForm.price"
+                      type="number"
+                      step="0.01"
+                      class="pl-7 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
+                      required
+                    />
+                  </div>
+                  <InputError class="mt-2" :message="editForm.errors.price" />
+                </div>
+
+                <!-- Stock Quantity -->
+                <div>
+                  <InputLabel for="edit_stock_quantity" value="Stock Quantity" />
+                  <TextInput
+                    id="edit_stock_quantity"
+                    v-model="editForm.stock_quantity"
+                    type="number"
+                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm"
+                    required
+                  />
+                  <InputError class="mt-2" :message="editForm.errors.stock_quantity" />
+                </div>
               </div>
-              <div v-else class="relative w-full">
-                <img :src="imagePreview" class="mx-auto h-48 w-auto object-contain rounded-md" alt="Product preview" />
+
+              <!-- Image Upload -->
+              <div class="mt-6">
+                <InputLabel for="edit_image" value="Product Image" />
+                <div 
+                  class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-700 border-dashed rounded-md"
+                  :class="{ 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20': isDragging }"
+                  @dragover="handleDragOver"
+                  @dragleave="handleDragLeave"
+                  @drop="handleDrop"
+                >
+                  <div v-if="!imagePreview" class="space-y-1 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <div class="flex text-sm text-gray-600 dark:text-gray-400">
+                      <label for="edit_image" class="relative cursor-pointer bg-white dark:bg-gray-800 rounded-md font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                        <span>Upload a file</span>
+                        <input 
+                          id="edit_image" 
+                          type="file" 
+                          class="sr-only" 
+                          @change="handleImageUpload"
+                          accept="image/*"
+                        >
+                      </label>
+                      <p class="pl-1">or drag and drop</p>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      PNG, JPG, GIF up to 10MB
+                    </p>
+                  </div>
+                  <div v-else class="relative w-full">
+                    <img :src="imagePreview" class="mx-auto h-48 w-auto object-contain rounded-md" alt="Product preview" />
+                    <button 
+                      type="button" 
+                      @click="removeImage"
+                      class="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 focus:outline-none"
+                    >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <InputError class="mt-2" :message="editForm.errors.image" />
+              </div>
+
+              <div class="flex items-center justify-end mt-6">
                 <button 
                   type="button" 
-                  @click="removeImage"
-                  class="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 focus:outline-none"
+                  @click="closeEditModal"
+                  class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
                 >
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  Cancel
                 </button>
+                <PrimaryButton 
+                  class="px-6 py-2"
+                  :disabled="editForm.processing"
+                >
+                  Update Product
+                </PrimaryButton>
               </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Edit Branch Modal -->
+        <div
+          v-if="isEditBranchModalOpen"
+          class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
+        >
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Edit Branch</h3>
+              <button @click="closeEditBranchModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
             </div>
-            <InputError class="mt-2" :message="editForm.errors.image" />
-          </div>
+            
+            <form @submit.prevent="updateBranch" class="space-y-6">
+              <div>
+                <InputLabel for="branch_name" value="Branch Name" />
+                <TextInput
+                  id="branch_name"
+                  v-model="editBranchForm.name"
+                  type="text"
+                  class="mt-1 block w-full"
+                  required
+                />
+                <InputError class="mt-2" :message="editBranchForm.errors.name" />
+              </div>
 
-          <div class="flex items-center justify-end mt-6">
-            <button 
-              type="button" 
-              @click="closeEditModal"
-              class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-            >
-              Cancel
-            </button>
-            <PrimaryButton 
-              class="px-6 py-2"
-              :disabled="editForm.processing"
-            >
-              Update Product
-            </PrimaryButton>
-          </div>
-        </form>
-      </div>
-    </div>
+              <div>
+                <InputLabel for="branch_location" value="Location" />
+                <TextInput
+                  id="branch_location"
+                  v-model="editBranchForm.location"
+                  type="text"
+                  class="mt-1 block w-full"
+                  required
+                />
+                <InputError class="mt-2" :message="editBranchForm.errors.location" />
+              </div>
 
-    <!-- Edit Branch Modal -->
-    <div
-      v-if="isEditBranchModalOpen"
-      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
-    >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Edit Branch</h3>
-          <button @click="closeEditBranchModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+              <div class="flex items-center justify-end mt-6">
+                <button 
+                  type="button" 
+                  @click="closeEditBranchModal"
+                  class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <PrimaryButton 
+                  class="px-6 py-2"
+                  :disabled="editBranchForm.processing"
+                >
+                  Update Branch
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
         </div>
-        
-        <form @submit.prevent="updateBranch" class="space-y-6">
-          <div>
-            <InputLabel for="branch_name" value="Branch Name" />
-            <TextInput
-              id="branch_name"
-              v-model="editBranchForm.name"
-              type="text"
-              class="mt-1 block w-full"
-              required
-            />
-            <InputError class="mt-2" :message="editBranchForm.errors.name" />
-          </div>
 
-          <div>
-            <InputLabel for="branch_location" value="Location" />
-            <TextInput
-              id="branch_location"
-              v-model="editBranchForm.location"
-              type="text"
-              class="mt-1 block w-full"
-              required
-            />
-            <InputError class="mt-2" :message="editBranchForm.errors.location" />
-          </div>
+        <!-- New Branch Modal -->
+        <div
+          v-if="isNewBranchModalOpen"
+          class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
+        >
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Add New Branch</h3>
+              <button @click="closeNewBranchModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+            </div>
+            
+            <form @submit.prevent="createBranch" class="space-y-6">
+              <div>
+                <InputLabel for="branch_name" value="Branch Name" />
+                <TextInput
+                  id="branch_name"
+                  v-model="newBranchForm.name"
+                  type="text"
+                  class="mt-1 block w-full"
+                  required
+                />
+                <InputError class="mt-2" :message="newBranchForm.errors.name" />
+              </div>
 
-          <div class="flex items-center justify-end mt-6">
-            <button 
-              type="button" 
-              @click="closeEditBranchModal"
-              class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-            >
-              Cancel
-            </button>
-            <PrimaryButton 
-              class="px-6 py-2"
-              :disabled="editBranchForm.processing"
-            >
-              Update Branch
-            </PrimaryButton>
-          </div>
-        </form>
-      </div>
-    </div>
+              <div>
+                <InputLabel for="branch_location" value="Location" />
+                <TextInput
+                  id="branch_location"
+                  v-model="newBranchForm.location"
+                  type="text"
+                  class="mt-1 block w-full"
+                  required
+                />
+                <InputError class="mt-2" :message="newBranchForm.errors.location" />
+              </div>
 
-    <!-- New Branch Modal -->
-    <div
-      v-if="isNewBranchModalOpen"
-      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
-    >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Add New Branch</h3>
-          <button @click="closeNewBranchModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+              <div>
+                <InputLabel for="contact_number" value="Contact Number" />
+                <TextInput
+                  id="contact_number"
+                  v-model="newBranchForm.contact_number"
+                  type="text"
+                  class="mt-1 block w-full"
+                />
+                <InputError class="mt-2" :message="newBranchForm.errors.contact_number" />
+              </div>
+
+              <div class="flex items-center justify-end mt-6">
+                <button 
+                  type="button" 
+                  @click="closeNewBranchModal"
+                  class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <PrimaryButton 
+                  class="px-6 py-2"
+                  :disabled="newBranchForm.processing"
+                >
+                  Create Branch
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
         </div>
-        
-        <form @submit.prevent="createBranch" class="space-y-6">
-          <div>
-            <InputLabel for="branch_name" value="Branch Name" />
-            <TextInput
-              id="branch_name"
-              v-model="newBranchForm.name"
-              type="text"
-              class="mt-1 block w-full"
-              required
-            />
-            <InputError class="mt-2" :message="newBranchForm.errors.name" />
-          </div>
 
-          <div>
-            <InputLabel for="branch_location" value="Location" />
-            <TextInput
-              id="branch_location"
-              v-model="newBranchForm.location"
-              type="text"
-              class="mt-1 block w-full"
-              required
-            />
-            <InputError class="mt-2" :message="newBranchForm.errors.location" />
+        <!-- Delete Confirmation Modal -->
+        <div
+          v-if="isConfirmDeleteModalOpen"
+          class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
+        >
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-96 p-6">
+            <div class="text-center">
+              <svg class="mx-auto h-12 w-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Delete Branch</h3>
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Are you sure you want to delete this branch? This action cannot be undone.
+              </p>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+              <button
+                @click="isConfirmDeleteModalOpen = false"
+                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                @click="confirmDelete"
+                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-
-          <div>
-            <InputLabel for="contact_number" value="Contact Number" />
-            <TextInput
-              id="contact_number"
-              v-model="newBranchForm.contact_number"
-              type="text"
-              class="mt-1 block w-full"
-            />
-            <InputError class="mt-2" :message="newBranchForm.errors.contact_number" />
-          </div>
-
-          <div class="flex items-center justify-end mt-6">
-            <button 
-              type="button" 
-              @click="closeNewBranchModal"
-              class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
-            >
-              Cancel
-            </button>
-            <PrimaryButton 
-              class="px-6 py-2"
-              :disabled="newBranchForm.processing"
-            >
-              Create Branch
-            </PrimaryButton>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Delete Confirmation Modal -->
-    <div
-      v-if="isConfirmDeleteModalOpen"
-      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
-    >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-96 p-6">
-        <div class="text-center">
-          <svg class="mx-auto h-12 w-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Delete Branch</h3>
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Are you sure you want to delete this branch? This action cannot be undone.
-          </p>
-        </div>
-        <div class="mt-6 flex justify-end space-x-3">
-          <button
-            @click="isConfirmDeleteModalOpen = false"
-            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
-          >
-            Cancel
-          </button>
-          <button
-            @click="confirmDelete"
-            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            Delete
-          </button>
         </div>
       </div>
     </div>

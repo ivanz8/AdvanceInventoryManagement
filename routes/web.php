@@ -11,7 +11,9 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\SalesReportController;
 use Illuminate\Http\Request;
+use App\Http\Controllers\SalesDashboardController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -150,6 +152,15 @@ Route::middleware([
 
     // Add this with your other product routes
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+
+    // Sales Report Routes
+    Route::get('/sales/report', [SalesReportController::class, 'index'])->name('sales.report');
+    Route::get('/sales/export/csv', [SalesReportController::class, 'exportCsv'])->name('sales.export.csv');
+    Route::get('/sales/export/pdf', [SalesReportController::class, 'exportPdf'])->name('sales.export.pdf');
+
+    // Sales Dashboard Routes
+    Route::get('/sales/dashboard', [SalesDashboardController::class, 'dashboard'])->name('sales.dashboard');
+    Route::get('/sales/realtime', [SalesDashboardController::class, 'realtime'])->name('sales.realtime');
 });
 
 

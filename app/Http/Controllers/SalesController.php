@@ -15,7 +15,7 @@ class SalesController extends Controller
     {
         try {
             $query = Order::with(['items.product', 'branch'])
-                ->where('status', 'completed');
+                ->whereIn('status', ['completed', 'confirmed']);
 
             // Filter by branch if specified
             if ($request->has('branch_id')) {
@@ -81,7 +81,7 @@ class SalesController extends Controller
     public function branchStats(Request $request)
     {
         $branches = Branch::with(['orders' => function ($query) use ($request) {
-            $query->where('status', 'completed');
+            $query->whereIn('status', ['completed', 'confirmed']);
             
             if ($request->has('start_date')) {
                 $query->whereDate('created_at', '>=', $request->start_date);
