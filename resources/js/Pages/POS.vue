@@ -230,167 +230,217 @@ const finalizePayment = async () => {
     <AppLayout>
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <!-- Debug Button -->
-                        <div class="mb-4">
-                            <button 
-                                @click="debugInfo" 
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-sm"
+                <!-- Branch Selection -->
+                <div v-if="!selectedBranch" class="mb-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Select a Branch</h3>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                Choose a branch to view its details
+                            </p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div
+                            v-for="branch in branches"
+                            :key="branch.id"
+                            @click="selectBranch(branch.id)"
+                            class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer border-2 border-transparent hover:border-indigo-500 transform hover:scale-105"
+                        >
+                            <h4 class="text-xl font-semibold text-white">
+                                {{ branch.name }}
+                            </h4>
+                            <p class="text-gray-400 mt-2">
+                                {{ branch.location }}
+                            </p>
+                            <p class="text-gray-500 mt-2 text-sm">
+                                {{ branch.products?.length || 0 }} Products
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Products Section -->
+                    <div class="lg:col-span-2">
+                        <!-- Branch Info and Back Button -->
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                {{ branches.find(b => b.id === selectedBranch)?.name }}
+                            </h3>
+                            <button
+                                @click="selectedBranch = null"
+                                class="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400"
                             >
-                                Debug Info
+                                Change Branch
                             </button>
                         </div>
-                        
-                        <!-- Branch Selection -->
-                        <div v-if="!selectedBranch" class="mb-8">
-                            <div class="mb-6">
-                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Select a Branch</h3>
-                                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                    Choose a branch to start selling products.
-                                </p>
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <div
-                                    v-for="branch in branches"
-                                    :key="branch.id"
-                                    @click="selectBranch(branch.id)"
-                                    class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-indigo-500"
-                                >
-                                    <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                                        {{ branch.name }}
-                                    </h4>
-                                    <p class="text-gray-600 dark:text-gray-400 mt-2">
-                                        {{ branch.location }}
-                                    </p>
-                                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                                        {{ branch.products?.length || 0 }} Products
-                                    </p>
+
+                        <!-- Search and Filter -->
+                        <div class="mb-6 flex flex-col sm:flex-row gap-4">
+                            <div class="relative flex-1">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
                                 </div>
+                                <input
+                                    v-model="searchQuery"
+                                    type="text"
+                                    placeholder="Search products..."
+                                    class="pl-10 w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600"
+                                />
+                            </div>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                    </svg>
+                                </div>
+                                <select
+                                    v-model="selectedCategory"
+                                    class="pl-10 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600"
+                                >
+                                    <option v-for="category in categories" :key="category" :value="category">
+                                        {{ category === 'all' ? 'All Categories' : category }}
+                                    </option>
+                                </select>
                             </div>
                         </div>
 
-                        <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <!-- Products Section -->
-                            <div class="lg:col-span-2">
-                                <!-- Branch Info and Back Button -->
-                                <div class="flex justify-between items-center mb-6">
-                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-                                        {{ branches.find(b => b.id === selectedBranch)?.name }}
-                                    </h3>
-                                    <button
-                                        @click="selectedBranch = null"
-                                        class="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400"
+                        <!-- Products Grid -->
+                        <div v-if="filteredProducts.length === 0" class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="mt-2 text-gray-500 dark:text-gray-400">No products found</p>
+                        </div>
+                        
+                        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            <div
+                                v-for="product in filteredProducts"
+                                :key="product.id"
+                                class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-all transform hover:scale-105"
+                                @click="addToCart(product)"
+                            >
+                                <div class="relative">
+                                    <img 
+                                        :src="product.image ? `/storage/${product.image}` : 'https://via.placeholder.com/150'" 
+                                        :alt="product.name" 
+                                        class="w-full h-32 object-cover rounded-md mb-2" 
+                                    />
+                                    <div class="absolute top-2 right-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                        ${{ typeof product.price === 'number' ? product.price.toFixed(2) : product.price }}
+                                    </div>
+                                </div>
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate">{{ product.name }}</h3>
+                                <div class="flex justify-between items-center mt-2">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        Stock: {{ product.stock_quantity }}
+                                    </p>
+                                    <button 
+                                        class="bg-indigo-600 text-white p-1 rounded-full hover:bg-indigo-700 transition-colors"
+                                        @click.stop="addToCart(product)"
                                     >
-                                        Change Branch
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                        </svg>
                                     </button>
                                 </div>
-
-                                <!-- Search and Filter -->
-                                <div class="mb-6 flex flex-col sm:flex-row gap-4">
-                                    <input
-                                        v-model="searchQuery"
-                                        type="text"
-                                        placeholder="Search products..."
-                                        class="flex-1 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600"
-                                    />
-                                    <select
-                                        v-model="selectedCategory"
-                                        class="rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600"
-                                    >
-                                        <option v-for="category in categories" :key="category" :value="category">
-                                            {{ category === 'all' ? 'All Categories' : category }}
-                                        </option>
-                                    </select>
-                                </div>
-
-                                <!-- Products Grid -->
-                                <div v-if="filteredProducts.length === 0" class="text-center py-8">
-                                    <p class="text-gray-500 dark:text-gray-400">No products found</p>
-                                </div>
-                                
-                                <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                    <div
-                                        v-for="product in filteredProducts"
-                                        :key="product.id"
-                                        class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-shadow"
-                                        @click="addToCart(product)"
-                                    >
-                                        <img 
-                                            :src="product.image ? `/storage/${product.image}` : 'https://via.placeholder.com/150'" 
-                                            :alt="product.name" 
-                                            class="w-full h-32 object-cover rounded-md mb-2" 
-                                        />
-                                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ product.name }}</h3>
-                                        <p class="text-gray-600 dark:text-gray-300">${{ typeof product.price === 'number' ? product.price.toFixed(2) : product.price }}</p>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                                            Stock: {{ product.stock_quantity }}
-                                        </p>
-                                    </div>
-                                </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <!-- Cart Section -->
-                            <div class="lg:col-span-1">
-                                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Cart</h2>
-                                    
-                                    <!-- Empty Cart Message -->
-                                    <div v-if="cart.length === 0" class="text-center py-8">
-                                        <p class="text-gray-500 dark:text-gray-400">Your cart is empty</p>
+                    <!-- Cart Section -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 sticky top-6">
+                            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                                <svg class="w-6 h-6 mr-2 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                                Cart
+                            </h2>
+                            
+                            <!-- Empty Cart Message -->
+                            <div v-if="cart.length === 0" class="text-center py-8">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                                <p class="mt-2 text-gray-500 dark:text-gray-400">Your cart is empty</p>
+                            </div>
+                            
+                            <!-- Cart Items -->
+                            <div v-else class="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                                <div v-for="item in cart" :key="item.id" class="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ item.name }}</h4>
+                                        <p class="text-sm text-gray-600 dark:text-gray-300">${{ typeof item.price === 'number' ? item.price.toFixed(2) : item.price }}</p>
                                     </div>
-                                    
-                                    <!-- Cart Items -->
-                                    <div v-else class="space-y-4 mb-6">
-                                        <div v-for="item in cart" :key="item.id" class="flex items-center justify-between">
-                                            <div class="flex-1">
-                                                <h4 class="text-sm font-medium text-gray-900 dark:text-white">{{ item.name }}</h4>
-                                                <p class="text-sm text-gray-600 dark:text-gray-300">${{ typeof item.price === 'number' ? item.price.toFixed(2) : item.price }}</p>
-                                            </div>
-                                            <div class="flex items-center space-x-2">
-                                                <input
-                                                    type="number"
-                                                    v-model="item.quantity"
-                                                    @change="updateQuantity(item.id, parseInt($event.target.value))"
-                                                    class="w-16 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
-                                                    min="1"
-                                                    :max="item.stock_quantity"
-                                                />
-                                                <button
-                                                    @click.stop="removeFromCart(item.id)"
-                                                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                                >
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Cart Summary -->
-                                    <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
-                                        <div class="flex justify-between mb-2">
-                                            <span class="text-gray-600 dark:text-gray-300">Subtotal</span>
-                                            <span class="text-gray-900 dark:text-white">${{ subtotal.toFixed(2) }}</span>
-                                        </div>
-                                        <div class="flex justify-between mb-2">
-                                            <span class="text-gray-600 dark:text-gray-300">Tax (10%)</span>
-                                            <span class="text-gray-900 dark:text-white">${{ tax.toFixed(2) }}</span>
-                                        </div>
-                                        <div class="flex justify-between mb-4">
-                                            <span class="text-lg font-semibold text-gray-900 dark:text-white">Total</span>
-                                            <span class="text-lg font-semibold text-gray-900 dark:text-white">${{ total.toFixed(2) }}</span>
+                                    <div class="flex items-center space-x-2">
+                                        <div class="flex items-center border border-gray-300 dark:border-gray-600 rounded-md">
+                                            <button 
+                                                @click.stop="updateQuantity(item.id, item.quantity - 1)"
+                                                class="px-2 py-1 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-md"
+                                                :disabled="item.quantity <= 1"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                                                </svg>
+                                            </button>
+                                            <input
+                                                type="number"
+                                                v-model="item.quantity"
+                                                @change="updateQuantity(item.id, parseInt($event.target.value))"
+                                                class="w-12 text-center border-0 focus:ring-0 dark:bg-gray-800 dark:text-white"
+                                                min="1"
+                                                :max="item.stock_quantity"
+                                            />
+                                            <button 
+                                                @click.stop="updateQuantity(item.id, item.quantity + 1)"
+                                                class="px-2 py-1 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-r-md"
+                                                :disabled="item.quantity >= item.stock_quantity"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                </svg>
+                                            </button>
                                         </div>
                                         <button
-                                            @click="processPayment"
-                                            class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                            :disabled="cart.length === 0"
+                                            @click.stop="removeFromCart(item.id)"
+                                            class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                                         >
-                                            Process Payment
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Cart Summary -->
+                            <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-gray-600 dark:text-gray-300">Subtotal</span>
+                                    <span class="text-gray-900 dark:text-white">${{ subtotal.toFixed(2) }}</span>
+                                </div>
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-gray-600 dark:text-gray-300">Tax (10%)</span>
+                                    <span class="text-gray-900 dark:text-white">${{ tax.toFixed(2) }}</span>
+                                </div>
+                                <div class="flex justify-between mb-4">
+                                    <span class="text-lg font-semibold text-gray-900 dark:text-white">Total</span>
+                                    <span class="text-lg font-semibold text-gray-900 dark:text-white">${{ total.toFixed(2) }}</span>
+                                </div>
+                                <button
+                                    @click="processPayment"
+                                    class="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center justify-center"
+                                    :disabled="cart.length === 0"
+                                >
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    Process Payment
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -512,7 +562,7 @@ const finalizePayment = async () => {
                     <button
                         @click="finalizePayment"
                         class="px-6 py-3 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        :disabled="isProcessing || (selectedPaymentMethod === 'cash' && paymentAmount.value < total.value)"
+                        :disabled="isProcessing || (selectedPaymentMethod === 'cash' && paymentAmount < total)"
                     >
                         <span v-if="isProcessing" class="flex items-center">
                             <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

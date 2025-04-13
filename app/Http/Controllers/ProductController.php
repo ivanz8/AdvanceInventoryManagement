@@ -14,9 +14,13 @@ class ProductController extends Controller
 {
     public function index()
     {
-        return inertia('Dashboard', [
-            'products' => Product::with(['category', 'branch'])->get()
-        ]);
+        $perPage = request('per_page', 10);
+        
+        $products = Product::with(['category', 'branch'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+            
+        return response()->json($products);
     }
 
     public function create()

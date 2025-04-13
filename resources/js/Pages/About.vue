@@ -382,12 +382,12 @@ const confirmDelete = () => {
 </script>
 
 <template>
-  <AppLayout title="ABOUT">
+  <AppLayout title="Branch Management">
     <template #header>
       <div class="flex justify-between items-center">
-      <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
           Branch Management
-      </h2>
+        </h2>
         <div class="text-sm text-gray-500 dark:text-gray-400">
           Manage your branch operations
         </div>
@@ -406,32 +406,31 @@ const confirmDelete = () => {
               </p>
             </div>
             <div class="flex items-center space-x-2">
-                <button
-                    @click="openEditBranchModal"
-                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center space-x-2"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    <span>Edit Branch</span>
-                </button>
-                <button
-                    @click="isConfirmDeleteModalOpen = true"
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    <span>Delete Branch</span>
-                </button>
+              <button
+                @click="openEditBranchModal"
+                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center space-x-2"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span>Edit Branch</span>
+              </button>
+              <button
+                @click="isConfirmDeleteModalOpen = true"
+                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Delete Branch</span>
+              </button>
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <!-- Products Module Card - Only visible to Admin and Warehouse -->
+            <!-- Products Module Card -->
             <div
-              v-if="selectedBranch"
               @click="selectModule('products')"
-              class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-indigo-500"
+              class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer border-2 border-transparent hover:border-indigo-500 transform hover:scale-105"
             >
               <div class="flex items-center">
                 <div class="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-full">
@@ -446,11 +445,10 @@ const confirmDelete = () => {
               </p>
             </div>
 
-            <!-- Sales Module Card - Only visible to Admin and Cashier -->
+            <!-- Sales Module Card -->
             <div
-              v-if="selectedBranch"
               @click="selectModule('sales')"
-              class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-indigo-500"
+              class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer border-2 border-transparent hover:border-green-500 transform hover:scale-105"
             >
               <div class="flex items-center">
                 <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
@@ -467,47 +465,46 @@ const confirmDelete = () => {
           </div>
         </div>
 
-        <!-- Branch Selection - Only show branches user has access to -->
+        <!-- Branch Selection -->
         <div v-if="!selectedBranch" class="mb-8">
-          
-          <div class="flex justify-between items-center mb-4">
-            <div>
-                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Select a Branch</h3>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Select a Branch</h3>
+                  <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     Choose a branch to view its details
-                </p>
+                  </p>
+                </div>
+                <button 
+                    @click="openNewBranchModal"
+                    class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add New Branch
+                </button>
             </div>
-            <button
-                @click="openNewBranchModal"
-                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center space-x-2"
-            >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Add New Branch</span>
-            </button>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-              v-for="branch in branches"
-              :key="branch.id"
-              @click="selectBranch(branch.id)"
-              class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-indigo-500"
-            >
-              <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                {{ branch.name }}
-              </h4>
-              <p class="text-gray-600 dark:text-gray-400 mt-2">
-                {{ branch.location }}
-              </p>
-              <p class="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                {{ branch.products?.length || 0 }} Products
-              </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div
+                    v-for="branch in branches"
+                    :key="branch.id"
+                    @click="selectBranch(branch.id)"
+                    class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer border-2 border-transparent hover:border-indigo-500 transform hover:scale-105"
+                >
+                    <h4 class="text-xl font-semibold text-gray-900 dark:text-white">
+                        {{ branch.name }}
+                    </h4>
+                    <p class="text-gray-600 dark:text-gray-400 mt-2">
+                        {{ branch.location }}
+                    </p>
+                    <p class="text-gray-500 mt-2 text-sm">
+                        {{ branch.products?.length || 0 }} Products
+                    </p>
+                </div>
             </div>
-          </div>
         </div>
 
-        <!-- Products Module - Only visible to Admin and Warehouse -->
+        <!-- Products Module -->
         <div v-if="selectedModule === 'products' && (selectedBranch)" class="space-y-6">
           <!-- Module Header -->
           <div class="flex justify-between items-center">
@@ -531,7 +528,7 @@ const confirmDelete = () => {
           </div>
 
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6">
-          <!-- Filter Dropdown -->
+            <!-- Filter Dropdown -->
             <div class="mb-6 flex items-center">
               <label for="category" class="mr-2 font-medium text-gray-700 dark:text-gray-300">Filter by Category:</label>
               <select
@@ -551,8 +548,8 @@ const confirmDelete = () => {
               </select>
             </div>
 
-          <!-- Loading Skeleton -->
-          <div v-if="loading" class="space-y-4">
+            <!-- Loading Skeleton -->
+            <div v-if="loading" class="space-y-4">
               <div v-for="n in 5" :key="n" class="animate-pulse flex space-x-4 p-4 border dark:border-gray-700 rounded-lg">
                 <div class="rounded bg-gray-200 dark:bg-gray-700 h-24 w-24"></div>
                 <div class="flex-1 space-y-3 py-1">
@@ -566,27 +563,27 @@ const confirmDelete = () => {
                 <div class="w-24 flex items-center">
                   <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
                 </div>
+              </div>
             </div>
-          </div>
 
             <!-- Products List -->
-          <div v-else>
+            <div v-else>
               <div v-if="visibleProducts.length > 0" class="space-y-4">
-              <div
-                v-for="product in visibleProducts"
-                :key="product.id"
-                  class="flex space-x-4 p-4 border dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 transition cursor-pointer"
-                @click="openModal(product)"
-              >
+                <div
+                  v-for="product in visibleProducts"
+                  :key="product.id"
+                  class="flex space-x-4 p-4 border dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 transition cursor-pointer transform hover:scale-102"
+                  @click="openModal(product)"
+                >
                   <div class="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-                  <img
-                    :src="`/storage/${product.image}`"
-                    alt="Product Image"
+                    <img
+                      :src="`/storage/${product.image}`"
+                      alt="Product Image"
                       class="w-full h-full object-cover"
-                  />
-                </div>
+                    />
+                  </div>
                   <div class="flex-1">
-                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ product.name }}</h3>
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ product.name }}</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">ID: {{ product.id }}</p>
                     <div class="mt-2 space-x-4">
                       <span class="text-sm text-gray-600 dark:text-gray-400">
@@ -607,22 +604,22 @@ const confirmDelete = () => {
               </div>
               <div v-else class="text-center text-gray-500 dark:text-gray-400 mt-6">
                 No products found for selected category.
-            </div>
+              </div>
 
-            <div class="mt-6 text-center">
-              <button
-                v-if="visibleProducts.length < filteredProducts.length"
-                @click="showMore"
+              <div class="mt-6 text-center">
+                <button
+                  v-if="visibleProducts.length < filteredProducts.length"
+                  @click="showMore"
                   class="px-4 py-2 bg-indigo-600 dark:bg-indigo-700 text-white rounded hover:bg-indigo-700 dark:hover:bg-indigo-800"
-              >
-                Show More
-              </button>
+                >
+                  Show More
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Sales Module - Only visible to Admin and Cashier -->
+        <!-- Sales Module -->
         <div v-if="selectedModule === 'sales' && (selectedBranch)" class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
           <div class="p-6">
             <div class="mb-6">
@@ -729,7 +726,7 @@ const confirmDelete = () => {
           </div>
         </div>
 
-        <!-- Reports View (when Reports module is selected) -->
+        <!-- Reports View -->
         <div v-else-if="selectedModule === 'reports'" class="space-y-6">
           <!-- Module Header -->
           <div class="flex justify-between items-center">
@@ -782,7 +779,7 @@ const confirmDelete = () => {
             >
               Edit
             </button>
-          <button @click="closeModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+            <button @click="closeModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
           </div>
         </div>
         <div class="flex flex-col sm:flex-row">
@@ -819,7 +816,7 @@ const confirmDelete = () => {
       </div>
     </div>
 
-    <!-- Edit Modal - Only visible to Admin and Warehouse -->
+    <!-- Edit Modal -->
     <div
       v-if="isEditModalOpen && (selectedBranch)"
       class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
@@ -1058,100 +1055,100 @@ const confirmDelete = () => {
 
     <!-- New Branch Modal -->
     <div
-        v-if="isNewBranchModalOpen"
-        class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
+      v-if="isNewBranchModalOpen"
+      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
     >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Add New Branch</h3>
-                <button @click="closeNewBranchModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
-            </div>
-            
-            <form @submit.prevent="createBranch" class="space-y-6">
-                <div>
-                    <InputLabel for="branch_name" value="Branch Name" />
-                    <TextInput
-                        id="branch_name"
-                        v-model="newBranchForm.name"
-                        type="text"
-                        class="mt-1 block w-full"
-                        required
-                    />
-                    <InputError class="mt-2" :message="newBranchForm.errors.name" />
-                </div>
-
-                <div>
-                    <InputLabel for="branch_location" value="Location" />
-                    <TextInput
-                        id="branch_location"
-                        v-model="newBranchForm.location"
-                        type="text"
-                        class="mt-1 block w-full"
-                        required
-                    />
-                    <InputError class="mt-2" :message="newBranchForm.errors.location" />
-                </div>
-
-                <div>
-                    <InputLabel for="contact_number" value="Contact Number" />
-                    <TextInput
-                        id="contact_number"
-                        v-model="newBranchForm.contact_number"
-                        type="text"
-                        class="mt-1 block w-full"
-                    />
-                    <InputError class="mt-2" :message="newBranchForm.errors.contact_number" />
-                </div>
-
-                <div class="flex items-center justify-end mt-6">
-                    <button 
-                        type="button" 
-                        @click="closeNewBranchModal"
-                        class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
-                    >
-                        Cancel
-                    </button>
-                    <PrimaryButton 
-                        class="px-6 py-2"
-                        :disabled="newBranchForm.processing"
-                    >
-                        Create Branch
-                    </PrimaryButton>
-                </div>
-            </form>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-3/4 lg:w-1/2 p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Add New Branch</h3>
+          <button @click="closeNewBranchModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
         </div>
+        
+        <form @submit.prevent="createBranch" class="space-y-6">
+          <div>
+            <InputLabel for="branch_name" value="Branch Name" />
+            <TextInput
+              id="branch_name"
+              v-model="newBranchForm.name"
+              type="text"
+              class="mt-1 block w-full"
+              required
+            />
+            <InputError class="mt-2" :message="newBranchForm.errors.name" />
+          </div>
+
+          <div>
+            <InputLabel for="branch_location" value="Location" />
+            <TextInput
+              id="branch_location"
+              v-model="newBranchForm.location"
+              type="text"
+              class="mt-1 block w-full"
+              required
+            />
+            <InputError class="mt-2" :message="newBranchForm.errors.location" />
+          </div>
+
+          <div>
+            <InputLabel for="contact_number" value="Contact Number" />
+            <TextInput
+              id="contact_number"
+              v-model="newBranchForm.contact_number"
+              type="text"
+              class="mt-1 block w-full"
+            />
+            <InputError class="mt-2" :message="newBranchForm.errors.contact_number" />
+          </div>
+
+          <div class="flex items-center justify-end mt-6">
+            <button 
+              type="button" 
+              @click="closeNewBranchModal"
+              class="mr-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+            <PrimaryButton 
+              class="px-6 py-2"
+              :disabled="newBranchForm.processing"
+            >
+              Create Branch
+            </PrimaryButton>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- Delete Confirmation Modal -->
     <div
-        v-if="isConfirmDeleteModalOpen"
-        class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
+      v-if="isConfirmDeleteModalOpen"
+      class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-80 flex items-center justify-center z-50"
     >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-96 p-6">
-            <div class="text-center">
-                <svg class="mx-auto h-12 w-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Delete Branch</h3>
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    Are you sure you want to delete this branch? This action cannot be undone.
-                </p>
-            </div>
-            <div class="mt-6 flex justify-end space-x-3">
-                <button
-                    @click="isConfirmDeleteModalOpen = false"
-                    class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
-                >
-                    Cancel
-                </button>
-                <button
-                    @click="confirmDelete"
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                >
-                    Delete
-                </button>
-            </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-11/12 sm:w-96 p-6">
+        <div class="text-center">
+          <svg class="mx-auto h-12 w-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Delete Branch</h3>
+          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Are you sure you want to delete this branch? This action cannot be undone.
+          </p>
         </div>
+        <div class="mt-6 flex justify-end space-x-3">
+          <button
+            @click="isConfirmDeleteModalOpen = false"
+            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmDelete"
+            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
